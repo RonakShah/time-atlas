@@ -94,12 +94,16 @@ export function EntryEditor({ entry, rows, initialRow, initialYear, close, save,
       if (controller.signal.aborted) return;
     }
     setName(result.title);
-    setSource(result.url);
+    setSource(dates?.source ?? result.url);
     setKind(dates?.kind ?? kind);
     setStart(dates?.start ?? "");
     setEnd(dates?.end ?? "");
     setOngoing(false);
-    setNotice(dates?.start ? "Check the suggested years before adding this item." : "Add a year from the article or a source you trust.");
+    if (dates?.hasAlternatives) {
+      setNotice("Sources give different dates. Check the article and use the years that fit your source.");
+    } else {
+      setNotice(dates?.start ? "Check the suggested years before adding this item." : "Add a year from the article or a source you trust.");
+    }
     setSearchStatus("");
     setMode("manual");
   }

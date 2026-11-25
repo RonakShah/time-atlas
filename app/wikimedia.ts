@@ -23,31 +23,60 @@ type Claim = {
   mainsnak: { datavalue?: { value: { time?: string; precision?: number } } };
 };
 
-function claimYear(claims: Claim[] = []) {
-  const preferred = claims.filter(claim => claim.rank === "preferred");
-  const best = preferred.length ? preferred : claims.filter(claim => claim.rank === "normal");
-  const years = best.map(claim => {
-    const value = claim.mainsnak.datavalue?.value;
-    const year = value?.time?.match(/^[+-]\d+/)?.[0];
-    return year && Number(year) && (value?.precision ?? 0) >= 9 ? String(Number(year)) : undefined;
-  });
-  return years.length && years.every(year => year === years[0]) ? years[0] : undefined;
+function readYear(claim: Claim) {
+  const value = claim.mainsnak.datavalue?.value;
+  const year = value?.time?.match(/^[+-]\d+/)?.[0];
+  return year && Number(year) && (value?.precision ?? 0) >= 9 ? String(Number(year)) : undefined;
 }
 
-export async function lookupDates(title: string, signal: AbortSignal) {
-  const data = await api<{ entities?: Record<string, { claims?: Record<string, Claim[]> }> }>(
-    "www.wikidata.org", { action: "wbgetentities", sites: "enwiki", titles: title, props: "claims" }, signal,
-  );
-  const claims = Object.values(data.entities ?? {})[0]?.claims ?? {};
-  const birth = claimYear(claims.P569);
-  const death = claimYear(claims.P570);
-  const start = claimYear(claims.P580) ?? claimYear(claims.P571);
-  const end = claimYear(claims.P582) ?? claimYear(claims.P576);
-  const point = claimYear(claims.P585);
-  const kind: Kind | undefined = birth || death ? "Person" : start && end ? "Period" : point ? "Event" : undefined;
+function claimDate(claims: Claim[] = []) {
+  const preferred = claims.filter(claim => claim.rank === "preferred");
+  const normal = claims.filter(claim => claim.rank === "normal");
+  const best = (preferred.length ? preferred : normal).map(readYear);
+  const year = best.every(value => value === best[0]) ? best[0] : undefined;
+  const hasAlternatives = new Set([...preferred, ...normal].map(readYear).filter(Boolean)).size > 1;
+  return { year, hasAlternatives };
+}
 
-  if (kind === "Person") return { kind, start: birth, end: death };
-  if (kind === "Period") return { kind, start, end };
-  if (kind === "Event") return { kind, start: point };
-  return { kind, start, end };
+type WikipediaPage = {
+  fullurl?: string;
+  pageprops?: { wikibase_item?: string };
+};
+
+export async function lookupDates(title: string, signal: AbortSignal): Promise<{
+  source?: string;
+  kind?: Kind;
+  start?: string;
+  end?: string;
+  hasAlternatives?: boolean;
+}> {
+  const article = await api<{ query?: { pages?: WikipediaPage[] } }>(
+    "en.wikipedia.org", {
+      action: "query", titles: title, redirects: "1", prop: "pageprops|info",
+      ppprop: "wikibase_item", inprop: "url", formatversion: "2",
+    }, signal,
+  );
+  const page = article.query?.pages?.[0];
+  const id = page?.pageprops?.wikibase_item;
+  const source = page?.fullurl;
+  if (!id) return { source };
+
+  const data = await api<{ entities?: Record<string, { claims?: Record<string, Claim[]> }> }>(
+    "www.wikidata.org", { action: "wbgetentities", ids: id, props: "claims" }, signal,
+  );
+  const claims = data.entities?.[id]?.claims ?? {};
+  const birth = claimDate(claims.P569);
+  const death = claimDate(claims.P570);
+  const rangeStart = claimDate(claims.P580);
+  const rangeEnd = claimDate(claims.P582);
+  const start = rangeStart.year || rangeStart.hasAlternatives ? rangeStart : claimDate(claims.P571);
+  const end = rangeEnd.year || rangeEnd.hasAlternatives ? rangeEnd : claimDate(claims.P576);
+  const point = claimDate(claims.P585);
+
+  if (birth.year || death.year || birth.hasAlternatives || death.hasAlternatives) {
+    return { source, kind: "Person", start: birth.year, end: death.year, hasAlternatives: birth.hasAlternatives || death.hasAlternatives };
+  }
+  if (start.year && end.year) return { source, kind: "Period", start: start.year, end: end.year, hasAlternatives: start.hasAlternatives || end.hasAlternatives };
+  if (point.year) return { source, kind: "Event", start: point.year, hasAlternatives: point.hasAlternatives };
+  return { source, start: start.year, end: end.year, hasAlternatives: start.hasAlternatives || end.hasAlternatives || point.hasAlternatives };
 }

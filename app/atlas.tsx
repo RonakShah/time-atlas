@@ -28,7 +28,7 @@ function arrange(entries: Entry[], position: (year: number) => number, width: nu
     const left = position(entry.start);
     const duration = Math.max(0, position(endYear(entry)) - left);
     const textWidth = Math.min(224, Math.max(82, entry.name.length * 7.4 + 44));
-    const inline = entry.kind !== "Event" && duration >= textWidth;
+    const inline = entry.kind !== "Event" && duration >= Math.min(textWidth, 90);
     const labelAtLeft = !inline && left + duration + textWidth + 12 > width;
     const from = labelAtLeft ? Math.max(0, left - textWidth) : left;
     const to = left + duration + (inline || labelAtLeft ? 12 : textWidth + 12);
@@ -57,7 +57,7 @@ export default function Atlas() {
   const [first, last] = boardRange(board.entries);
   const span = last - first;
   const chartWidth = Math.max(620, viewWidth) * zoom;
-  const step = rulerStep(span, chartWidth / 115);
+  const step = rulerStep(span, chartWidth / 75);
   const ticks = Array.from({ length: Math.floor((last - Math.ceil(first / step) * step) / step) + 1 }, (_, index) => Math.ceil(first / step) * step + index * step);
   const position = (year: number) => horizontalPadding + (axisYear(year) - first) / span * (chartWidth - horizontalPadding * 2);
   const visibleEntries = filter === "All" ? board.entries : board.entries.filter(entry => entry.kind === filter);

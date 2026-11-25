@@ -147,7 +147,7 @@ export function EntryEditor({ entry, rows, initialRow, initialYear, close, save,
           {kind !== "Event" && <label>End year <span className="optional">optional</span><input type="number" min={minimumYear} max={maximumYear} disabled={ongoing} value={end} onChange={event => setEnd(event.target.value)} /></label>}
         </div>
         <div className="date-help"><small>Use a minus sign for BCE, e.g. −44.</small>{kind !== "Event" && <label><input type="checkbox" checked={ongoing} onChange={event => setOngoing(event.target.checked)} /> Ongoing</label>}</div>
-        <label>Row<select value={row} onChange={event => setRow(event.target.value)}>{rows.map(option => <option key={option.id} value={option.id}>{option.name}</option>)}</select></label>
+        <label>Row<select aria-label="Row" value={row} onChange={event => setRow(event.target.value)}>{rows.map(option => <option key={option.id} value={option.id}>{option.name}</option>)}</select></label>
         <details className="extra-fields" open={Boolean(entry?.source || entry?.notes) || undefined}>
           <summary>Notes &amp; source <span className="optional">optional</span></summary>
           <label>Notes<textarea rows={2} maxLength={1000} value={notes} onChange={event => setNotes(event.target.value)} /></label>
